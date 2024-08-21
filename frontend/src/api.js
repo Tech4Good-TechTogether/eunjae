@@ -11,7 +11,7 @@ export async function fetchGuideLandmarks() {
   return data;
 }
 
-export const sendFrameToServer = async (imageSrc) => {
+export const sendFramesToServer = async (imageSrcList) => {
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
   try {
     const response = await fetch(`${apiUrl}/api/analyze_frame`, {
@@ -19,16 +19,17 @@ export const sendFrameToServer = async (imageSrc) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ image: imageSrc }),
+      body: JSON.stringify({ images: imageSrcList }),  // 여러 이미지를 서버로 전송
     });
 
     const data = await response.json();
-    if (data.status === "Hand detected") {
+    if (data.some(result => result.status === "Hand detected")) {
       // 추가 로직을 여기에 작성할 수 있습니다.
       console.log("손동작이 감지되었습니다.")
     }
     console.log('Server response:', data);
   } catch (error) {
-    console.error('Error sending frame to server:', error);
+    console.error('Error sending frames to server:', error);
   }
 };
+

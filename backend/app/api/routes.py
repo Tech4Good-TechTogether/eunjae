@@ -24,9 +24,15 @@ def analyze_frame_route():
         return '', 204  # OPTIONS 요청에 대해 204 상태 코드를 반환
 
     data = request.json
-    image = data.get('image')
-    result = analyze_frame(image)
-    return jsonify(result)
+    images = data.get('images', [])  # 여러 이미지가 리스트로 전송됨
+
+    results = []
+    for image in images:
+        result = analyze_frame(image)  # 각 이미지를 analyze_frame 함수로 처리
+        results.append(result)
+
+    return jsonify(results)  # 모든 이미지에 대한 결과를 반환
+
 
 
 @api_bp.route('/get_guide_landmarks', methods=['GET'])

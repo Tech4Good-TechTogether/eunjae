@@ -1,13 +1,25 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Webcam from 'react-webcam';
-import { sendFrameToServer, fetchGuideLandmarks } from './api';
+import { sendFramesToServer, fetchGuideLandmarks } from './api';
 import './App.css';
+
+// Mediapipe 손가락 랜드마크 인덱스 구조 정의
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4], // 엄지
+  [0, 5], [5, 6], [6, 7], [7, 8], // 검지
+  [5, 9], [9, 10], [10, 11], [11, 12], // 중지
+  [9, 13], [13, 14], [14, 15], [15, 16], // 약지
+  [13, 17], [17, 18], [18, 19], [19, 20], // 새끼
+  [0, 17] // 손바닥 연결
+];
 
 function App() {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const [guideLandmarks, setGuideLandmarks] = useState([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
+  const [capturedFrames, setCapturedFrames] = useState([]);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   // 가이드 영상의 랜드마크 데이터를 서버로부터 한 번만 가져오는 함수
   useEffect(() => {
@@ -22,28 +34,61 @@ function App() {
     };
 
     loadGuideLandmarks();
-  }, []); // 빈 의존성 배열을 전달해 컴포넌트가 처음 렌더링될 때 한 번만 실행되도록 함
+  }, []);
 
-  // 웹캠에서 프레임을 캡처하여 서버로 전송하는 함수
-  const captureFrame = () => {
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (imageSrc) {
-      sendFrameToServer(imageSrc);
-    } else {
-      console.error("Failed to capture image.");
-    }
+  // 3초 동안 프레임을 캡처하는 함수
+  const captureFramesForDuration = () => {
+    setIsCapturing(true);
+    const captureInterval = 100; // 100ms마다 프레임 캡처
+    const duration = 3000; // 3초
+
+    let frames = [];
+    const intervalId = setInterval(() => {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (imageSrc) {
+        frames.push(imageSrc);
+      }
+    }, captureInterval);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      setCapturedFrames(frames);
+      setIsCapturing(false);
+      sendFramesToServer(frames);
+    }, duration);
   };
+
 
   // 웹캠에 랜드마크를 그리는 함수
   const drawLandmarks = (ctx, landmarks) => {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.strokeStyle = 'red';
-    ctx.lineWidth = 2;
+
+    // 선 스타일
+    ctx.strokeStyle = '#00FF00'; // 연한 초록색 선
+    ctx.lineWidth = 3;
+
+    // 점 스타일
+    ctx.fillStyle = '#FF4500'; // 주황색 점
+    const pointRadius = 6;
 
     landmarks.forEach(landmark => {
+      // 점 그리기
       landmark.forEach(([x, y]) => {
         ctx.beginPath();
-        ctx.arc(x * ctx.canvas.width, y * ctx.canvas.height, 5, 0, 2 * Math.PI);
+        ctx.arc(x * ctx.canvas.width, y * ctx.canvas.height, pointRadius, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      // 선 그리기
+      HAND_CONNECTIONS.forEach(([startIdx, endIdx]) => {
+        const startX = landmark[startIdx][0] * ctx.canvas.width;
+        const startY = landmark[startIdx][1] * ctx.canvas.height;
+        const endX = landmark[endIdx][0] * ctx.canvas.width;
+        const endY = landmark[endIdx][1] * ctx.canvas.height;
+
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
         ctx.stroke();
       });
     });
@@ -51,7 +96,9 @@ function App() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      captureFrame();
+      if (!isCapturing) {
+        captureFramesForDuration();
+      }
 
       if (guideLandmarks.length > 0) {
         const canvas = canvasRef.current;
@@ -63,10 +110,10 @@ function App() {
         // 다음 프레임으로 이동 (순환)
         setCurrentFrameIndex(prevIndex => (prevIndex + 1) % guideLandmarks.length);
       }
-    }, 100); // 100ms마다 프레임을 캡처하고, 가이드 랜드마크를 웹캠에 그리기
+    }, 100);
 
     return () => clearInterval(interval);
-  }, [guideLandmarks, currentFrameIndex]);
+  }, [guideLandmarks, currentFrameIndex, isCapturing]);
 
   return (
     <div className="App">

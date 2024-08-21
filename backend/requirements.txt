@@ -1,0 +1,6 @@
+Flask
+flask-cors
+mediapipe
+numpy
+opencv-python
+Pillow

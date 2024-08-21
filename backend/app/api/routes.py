@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, Response, request, jsonify
 from flask_cors import cross_origin
 from .hand_landmark import gen
-from .pose_analysis import analyze_frame
+from .pose_analysis import analyze_frames
 import os
 import pickle
 
@@ -25,13 +25,18 @@ def analyze_frame_route():
 
     data = request.json
     images = data.get('images', [])  # 여러 이미지가 리스트로 전송됨
+    print("images의 형태 : ",len(images))
 
-    results = []
-    for image in images:
-        result = analyze_frame(image)  # 각 이미지를 analyze_frame 함수로 처리
-        results.append(result)
+    # results = []
+    
+    # for image in images:
+        # result = analyze_frame(image)  # 각 이미지를 analyze_frame 함수로 처리
+    result = analyze_frames(images)
+    # results.append(result)
+    
+    # print("Results:", result)
 
-    return jsonify(results)  # 모든 이미지에 대한 결과를 반환
+    return jsonify(result)  # 모든 이미지에 대한 결과를 반환
 
 
 

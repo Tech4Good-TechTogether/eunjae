@@ -37,15 +37,7 @@ hand_landmarks_dict = {
     20: "PINKY_TIP"
 }
 
-# 현재 파일의 디렉토리 경로
-current_dir = os.path.dirname(__file__)
 
-# static/landmarks 폴더의 절대 경로를 계산
-landmarks_path = os.path.join(current_dir, '..', 'static', 'landmarks', 'guide_landmarks.pkl')
-
-# 가이드 영상의 좌표를 미리 로드
-with open(landmarks_path, 'rb') as f:
-    guide_landmarks = pickle.load(f)
 
 def compare_joint(series_a, series_b):
     # frame_num, joint_num, 3(x,y,z)
@@ -82,6 +74,19 @@ def compare_hand(guide_landmarks, result_landmarks):
     return dist_joints, max_joint
     
 def analyze_frames(video_data):    
+    # 현재 파일의 디렉토리 경로
+    current_dir = os.path.dirname(__file__)
+
+    # static/landmarks 폴더의 절대 경로를 계산
+    landmarks_path = os.path.join(current_dir, '..', 'static', 'landmarks', 'guide_landmarks.pkl')
+
+    # 가이드 영상의 좌표를 미리 로드
+    with open(landmarks_path, 'rb') as f:
+        guide_landmarks = pickle.load(f)
+
+    # 최대 DTW 거리 (임의로 설정한 값, 실제 데이터에 따라 조정 가능)
+    max_distance = 35.0
+
     try:
         landmarks = []
         for image_data in video_data:
@@ -99,20 +104,38 @@ def analyze_frames(video_data):
                     for lm in hand_landmarks.landmark:
                         hand_data.append([lm.x, lm.y, lm.z])
                     landmarks.append(np.array(hand_data))
-        
-        guide_landmarks = np.array(guide_landmarks)
-        landmarks = np.array(landmarks)
-        
+
+        if len(landmarks) == 0:
+            print("No landmarks detected.")
+            return {
+                "status": "No hand detected",
+                "landmarks": False,
+                "results": [],
+                "comparison": None
+            }
+
         # 가이드 영상과 현재 영상의 손동작 비교
         if len(landmarks) > 0:
-            dist_joints, _ = compare_hand(guide_landmarks, landmarks)
-            
+            min_dist = float('inf')
+            best_match_frame = None
+
+            for guide_frame_landmarks in guide_landmarks:
+                for hand_index in range(2):  # 각 프레임에서 두 손에 대해 반복
+                    dist, _, _, _ = accelerated_dtw(landmarks[0], guide_frame_landmarks[hand_index], dist=euclidean)
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_match_frame = guide_frame_landmarks[hand_index]
+
+            # 퍼센트로 변환 (100 - (DTW 거리 / 최대 거리) * 100)
+            dtw_percentage = max(0, (1 - min_dist / max_distance) * 100)
+
             comparison_result = {
-                "distance": dist_joints,
-                #"best_match_frame": best_match_frame.tolist() if best_match_frame is not None else []
+                "distance": min_dist,
+                "dtw_percentage": dtw_percentage,
+                "best_match_frame": best_match_frame.tolist() if best_match_frame is not None else []
             }
         else:
-            comparison_result = {"distance": None, "best_match_frame": []}
+            comparison_result = {"distance": None, "dtw_percentage": None, "best_match_frame": []}
 
         return {
             "status": "Hand detected",
@@ -120,23 +143,28 @@ def analyze_frames(video_data):
             "results": [lm.tolist() for lm in landmarks],  # numpy 배열을 리스트로 변환하여 반환
             "comparison": comparison_result  # DTW 결과 추가
         }
-        
-        if len(landmarks)==0:
-            return {
-                "status": "No hand detected",
-                "landmarks": False,
-                "results": [],
-                "comparison": None  # 손이 감지되지 않으면 비교 결과도 None
-            }
-
     except Exception as e:
+        print("Error:", str(e))
         return {
             "status": "Error",
             "message": str(e)
         }
 
 
+
+
 def analyze_frame(image_data):
+    
+    # 현재 파일의 디렉토리 경로
+    current_dir = os.path.dirname(__file__)
+
+    # static/landmarks 폴더의 절대 경로를 계산
+    landmarks_path = os.path.join(current_dir, '..', 'static', 'landmarks', 'guide_landmarks.pkl')
+
+    # 가이드 영상의 좌표를 미리 로드
+    with open(landmarks_path, 'rb') as f:
+        guide_landmarks = pickle.load(f)
+        
     try:
         # base64로 인코딩된 이미지를 디코딩
         image_data = image_data.split(',')[1]
@@ -161,13 +189,13 @@ def analyze_frame(image_data):
                 best_match_frame = None
 
                 for guide_frame_landmarks in guide_landmarks:
-                    if len(guide_frame_landmarks) > 0:
-                        guide_frame_landmarks = guide_frame_landmarks[0]
-                        dist, _, _, _ = accelerated_dtw(current_frame_landmarks, guide_frame_landmarks, dist=euclidean)
-                        if dist < min_dist:
-                            min_dist = dist
-                            best_match_frame = guide_frame_landmarks
-                
+                    for hand_landmarks in guide_frame_landmarks:
+                        if hand_landmarks.shape == current_frame_landmarks.shape:
+                            dist, _, _, _ = accelerated_dtw(current_frame_landmarks, hand_landmarks, dist=euclidean)
+                            if dist < min_dist:
+                                min_dist = dist
+                                best_match_frame = hand_landmarks
+
                 comparison_result = {
                     "distance": min_dist,
                     "best_match_frame": best_match_frame.tolist() if best_match_frame is not None else []

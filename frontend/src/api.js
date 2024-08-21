@@ -23,10 +23,11 @@ export const sendFramesToServer = async (imageSrcList) => {
     });
 
     const data = await response.json();
-    if (data.some(result => result.status === "Hand detected")) {
-      // 추가 로직을 여기에 작성할 수 있습니다.
-      console.log("손동작이 감지되었습니다.")
-    }
+    console.log("비교결과 출력 렛츠고",data["comparison"]);
+    // if (data.some(result => result.status === "Hand detected")) {
+    //   // 추가 로직을 여기에 작성할 수 있습니다.
+    //   console.log("손동작이 감지되었습니다.")
+    // }
     console.log('Server response:', data);
   } catch (error) {
     console.error('Error sending frames to server:', error);

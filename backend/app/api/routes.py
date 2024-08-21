@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, Response, request, jsonify
 from flask_cors import cross_origin
 from .hand_landmark import gen
 from .pose_analysis import analyze_frame
+import os
+import pickle
 
 api_bp = Blueprint('api', __name__)
 
@@ -25,3 +27,25 @@ def analyze_frame_route():
     image = data.get('image')
     result = analyze_frame(image)
     return jsonify(result)
+
+
+@api_bp.route('/get_guide_landmarks', methods=['GET'])
+def get_guide_landmarks():
+    try:
+        # 현재 파일의 디렉토리 경로
+        current_dir = os.path.dirname(__file__)
+
+        # static/landmarks 폴더의 절대 경로를 계산
+        landmarks_path = os.path.join(current_dir, '..', 'static', 'landmarks', 'guide_landmarks.pkl')
+
+        # 가이드 영상의 좌표를 미리 로드
+        with open(landmarks_path, 'rb') as f:
+            guide_landmarks = pickle.load(f)
+        
+        # NumPy 배열을 리스트로 변환
+        guide_landmarks_list = [[landmark.tolist() for landmark in frame] for frame in guide_landmarks]
+
+        return jsonify({"guide_landmarks": guide_landmarks_list})
+    
+    except Exception as e:
+        return jsonify({"status": "Error", "message": str(e)}), 500
